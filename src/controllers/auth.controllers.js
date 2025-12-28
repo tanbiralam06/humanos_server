@@ -1,5 +1,6 @@
 import Mailgen from "mailgen";
 import { User } from "../models/user.models.js";
+import { Profile } from "../models/profile.models.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
@@ -40,6 +41,12 @@ const registerUser = asyncHandler(async (req, res) => {
     password,
     username,
     isEmailVerified: false,
+  });
+
+  // Create associated profile
+  await Profile.create({
+    owner: user._id,
+    fullName: "", // Client can update this later or pass it in body if needed
   });
 
   const { unHashedToken, hashedToken, tokenExpiry } =

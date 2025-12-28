@@ -5,16 +5,6 @@ import crypto from "crypto";
 
 const userSchema = new Schema(
   {
-    avatar: {
-      type: {
-        url: String,
-        localPath: String,
-      },
-      default: {
-        url: `https://placehold.co/200x400`,
-        localPath: "",
-      },
-    },
     username: {
       type: String,
       required: true,
@@ -30,10 +20,7 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
     },
-    fullName: {
-      type: String,
-      trim: true,
-    },
+
     password: {
       type: String,
       required: [true, "Password is required"],
@@ -109,8 +96,8 @@ userSchema.methods.generateTemporaryToken = function () {
     .update(unHashedToken)
     .digest("hex");
 
-  const tokenExpiry = Date.now() + (20*60*1000)  //20 minutes
-  return {unHashedToken, hashedToken, tokenExpiry}
+  const tokenExpiry = Date.now() + 20 * 60 * 1000; //20 minutes
+  return { unHashedToken, hashedToken, tokenExpiry };
 };
 
 export const User = mongoose.model("User", userSchema);

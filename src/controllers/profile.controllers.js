@@ -38,4 +38,21 @@ const updateProfile = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, profile, "Profile updated successfully"));
 });
 
-export { getMyProfile, updateProfile };
+const getUserProfileById = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const profile = await Profile.findOne({ owner: userId }).populate(
+    "owner",
+    "username email",
+  );
+
+  if (!profile) {
+    throw new ApiError(404, "Profile not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, profile, "User profile fetched successfully"));
+});
+
+export { getMyProfile, updateProfile, getUserProfileById };

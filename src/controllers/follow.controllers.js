@@ -1,4 +1,6 @@
+import Link from "mongoose";
 import { Follow } from "../models/follow.models.js";
+import mongoose from "mongoose";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
@@ -56,4 +58,68 @@ const getFollowStatus = asyncHandler(async (req, res) => {
   );
 });
 
-export { toggleFollow, getFollowStatus };
+const getFollowingList = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const followingList = await Follow.aggregate([
+    {
+      $match: {
+        follower: new mongoose.Types.ObjectId(userId),
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "following",
+        foreignField: "_id",
+        as: "user",
+        pipeline: [
+          {
+            $project: {
+              username: 1,
+              email: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$user",
+    },
+    {
+      $lookup: {
+        from: "profiles",
+        localField: "following",
+        foreignField: "owner",
+        as: "profile",
+      },
+    },
+    {
+      $unwind: {
+        path: "$profile",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        _id: "$user._id",
+        username: "$user.username",
+        email: "$user.email",
+        fullName: "$profile.fullName",
+        avatar: "$profile.avatar",
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        followingList,
+        "Following list fetched successfully",
+      ),
+    );
+});
+
+export { toggleFollow, getFollowStatus, getFollowingList };

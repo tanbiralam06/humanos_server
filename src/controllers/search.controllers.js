@@ -23,14 +23,43 @@ const universalSearch = asyncHandler(async (req, res) => {
   const searchQuery = q.trim();
 
   // Search for users (people)
-  const people = await User.find({
-    $or: [
-      { username: { $regex: searchQuery, $options: "i" } },
-      { email: { $regex: searchQuery, $options: "i" } },
-    ],
-  })
-    .select("username email")
-    .limit(10);
+  // Search for users (people)
+  const people = await User.aggregate([
+    {
+      $match: {
+        $or: [
+          { username: { $regex: searchQuery, $options: "i" } },
+          { email: { $regex: searchQuery, $options: "i" } },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: "profiles",
+        localField: "_id",
+        foreignField: "owner",
+        as: "profile",
+      },
+    },
+    {
+      $unwind: {
+        path: "$profile",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        username: 1,
+        email: 1,
+        fullName: "$profile.fullName",
+        avatar: "$profile.avatar",
+      },
+    },
+    {
+      $limit: 10,
+    },
+  ]);
 
   // Search for chatrooms
   const chatrooms = await Chatroom.find({

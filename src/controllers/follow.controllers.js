@@ -122,4 +122,87 @@ const getFollowingList = asyncHandler(async (req, res) => {
     );
 });
 
-export { toggleFollow, getFollowStatus, getFollowingList };
+const getFollowersList = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const followersList = await Follow.aggregate([
+    {
+      $match: {
+        following: new mongoose.Types.ObjectId(userId),
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "follower",
+        foreignField: "_id",
+        as: "user",
+        pipeline: [
+          {
+            $project: {
+              username: 1,
+              email: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$user",
+    },
+    {
+      $lookup: {
+        from: "profiles",
+        localField: "follower",
+        foreignField: "owner",
+        as: "profile",
+      },
+    },
+    {
+      $unwind: {
+        path: "$profile",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        _id: "$user._id",
+        username: "$user.username",
+        email: "$user.email",
+        fullName: "$profile.fullName",
+        avatar: "$profile.avatar",
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        followersList,
+        "Followers list fetched successfully",
+      ),
+    );
+});
+
+const removeFollower = asyncHandler(async (req, res) => {
+  const { followerId } = req.params;
+
+  await Follow.findOneAndDelete({
+    follower: followerId,
+    following: req.user._id,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Follower removed successfully"));
+});
+
+export {
+  toggleFollow,
+  getFollowStatus,
+  getFollowingList,
+  getFollowersList,
+  removeFollower,
+};

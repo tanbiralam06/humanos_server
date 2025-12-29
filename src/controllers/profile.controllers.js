@@ -1,4 +1,5 @@
 import { Profile } from "../models/profile.models.js";
+import { User } from "../models/user.models.js";
 import { Follow } from "../models/follow.models.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
@@ -33,8 +34,21 @@ const getMyProfile = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { fullName, bio, location } = req.body;
+  const { fullName, bio, location, username } = req.body;
 
+  // 1. Handle Username Update (if provided and different)
+  if (username && username !== req.user.username) {
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      throw new ApiError(409, "Username already taken");
+    }
+    // Update USER model
+    await User.findByIdAndUpdate(req.user._id, {
+      $set: { username: username.toLowerCase() },
+    });
+  }
+
+  // 2. Update PROFILE model
   const profile = await Profile.findOneAndUpdate(
     { owner: req.user._id },
     {
@@ -45,7 +59,7 @@ const updateProfile = asyncHandler(async (req, res) => {
       },
     },
     { new: true }, // Return the updated document
-  );
+  ).populate("owner", "username email");
 
   return res
     .status(200)

@@ -30,6 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "mailgen": "^2.0.32",
     "mongoose": "^8.19.1",
-    "nodemailer": "^7.0.9"
+    "nodemailer": "^7.0.9",
+    "socket.io": "^4.8.3"
   }
 }

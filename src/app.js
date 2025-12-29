@@ -27,12 +27,14 @@ import authRouter from "./routes/auth.routes.js";
 import profileRouter from "./routes/profile.routes.js";
 import chatroomRouter from "./routes/chatroom.routes.js";
 import searchRouter from "./routes/search.routes.js";
+import followRouter from "./routes/follow.routes.js";
 
 app.use("/api/v1/healthcheck", healthCheckRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/profile", profileRouter);
 app.use("/api/v1/chatrooms", chatroomRouter);
 app.use("/api/v1/search", searchRouter);
+app.use("/api/v1/follows", followRouter);
 
 app.get("/", (req, res) => {
   res.send("welcome to basecamp-api");

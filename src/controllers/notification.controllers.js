@@ -13,26 +13,62 @@ export const createNotification = async ({
   relatedId,
 }) => {
   try {
-    const notification = await Notification.create({
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Check for existing UNREAD notification of same type/recipient from today
+    const existingNotification = await Notification.findOne({
       recipient,
-      sender,
       type,
-      message,
-      relatedId,
+      isRead: false,
+      createdAt: { $gte: today },
     });
+
+    let notification;
+
+    if (existingNotification) {
+      // 2. Aggregate
+      const newCount = (existingNotification.groupCount || 0) + 1;
+      let newMessage = message;
+
+      // Simple text aggregation logic
+      // Assuming message format: "started following you"
+      if (type === "FOLLOW") {
+        newMessage = `and ${newCount} others started following you`;
+      } else if (type === "LIKE") {
+        newMessage = `and ${newCount} others liked your post`;
+      }
+
+      notification = await Notification.findByIdAndUpdate(
+        existingNotification._id,
+        {
+          sender, // Update to show the LATEST actor
+          message: newMessage,
+          groupCount: newCount,
+          $inc: { __v: 1 }, // Force update timestamp
+        },
+        { new: true },
+      ).populate("sender", "username fullName avatar");
+    } else {
+      // 3. Create New
+      notification = await Notification.create({
+        recipient,
+        sender,
+        type,
+        message,
+        relatedId,
+        groupCount: 0,
+      });
+      // Populate for socket
+      notification = await notification.populate(
+        "sender",
+        "username fullName avatar",
+      );
+    }
 
     // Real-time socket event
     try {
       const io = getIO();
-      // Emit to the recipient's room (Make sure users join a room named by their UserId on login)
-      // or filter connected sockets.
-      // Standard practice: io.to(recipientUserId).emit(...) if room = userId
-      // Or if we iterate sockets.
-      // Assuming socket.join(userId) happens on connection?
-      // In socket.js, we only saw join-room logic.
-      // Ideally, we should join a personal room on connection.
-      // For now, I'll rely on client-side joining 'notifications-<userId>' or similar.
-      // Let's assume we emit to a room with the recipient's ID.
       io.to(recipient.toString()).emit("notification", notification);
     } catch (socketError) {
       console.error("Socket emit failed:", socketError);

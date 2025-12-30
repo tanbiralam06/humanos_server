@@ -29,6 +29,10 @@ const notificationSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    groupCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

@@ -27,6 +27,10 @@ const profileSchema = new Schema(
       type: String,
       default: "",
     },
+    locationName: {
+      type: String,
+      default: "",
+    },
     // Human OS: Location & Context Layer
     location: {
       type: {

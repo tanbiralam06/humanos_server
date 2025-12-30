@@ -5,6 +5,8 @@ import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
 
+// Force restart
+
 const getMyProfile = asyncHandler(async (req, res) => {
   const profile = await Profile.findOne({ owner: req.user._id }).populate(
     "owner",
@@ -34,7 +36,7 @@ const getMyProfile = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { fullName, bio, location, username } = req.body;
+  const { fullName, bio, locationName, username } = req.body;
 
   // 1. Handle Username Update (if provided and different)
   if (username && username !== req.user.username) {
@@ -55,7 +57,7 @@ const updateProfile = asyncHandler(async (req, res) => {
       $set: {
         fullName,
         bio,
-        location,
+        locationName,
       },
     },
     { new: true }, // Return the updated document

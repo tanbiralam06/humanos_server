@@ -27,10 +27,44 @@ const profileSchema = new Schema(
       type: String,
       default: "",
     },
-    // We can add location here later for the "Human OS" features
+    // Human OS: Location & Context Layer
     location: {
-      type: String,
-      default: "",
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        index: "2dsphere",
+      },
+      lastUpdated: {
+        type: Date,
+        default: Date.now,
+      },
+      accuracy: {
+        type: Number, // GPS accuracy in meters
+      },
+      isSharing: {
+        type: Boolean,
+        default: false, // Privacy first: default off
+      },
+    },
+    // Human OS: Real-time Status
+    currentStatus: {
+      message: {
+        type: String,
+        trim: true,
+        maxLength: 50,
+      },
+      activityType: {
+        type: String,
+        enum: ["coffee", "cowork", "walk", "chat", "none"],
+        default: "none",
+      },
+      expiresAt: {
+        type: Date,
+      },
     },
   },
   {

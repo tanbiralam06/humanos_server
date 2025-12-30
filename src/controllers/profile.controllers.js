@@ -97,3 +97,114 @@ const getUserProfileById = asyncHandler(async (req, res) => {
 });
 
 export { getMyProfile, updateProfile, getUserProfileById };
+
+const updateLocation = asyncHandler(async (req, res) => {
+  const { lat, long, accuracy, isSharing } = req.body;
+
+  if (!lat || !long) {
+    throw new ApiError(400, "Latitude and Longitude are required");
+  }
+
+  // Update Profile with new location data
+  const profile = await Profile.findOneAndUpdate(
+    { owner: req.user._id },
+    {
+      $set: {
+        "location.type": "Point",
+        "location.coordinates": [parseFloat(long), parseFloat(lat)], // GeoJSON expects [long, lat]
+        "location.accuracy": accuracy,
+        "location.lastUpdated": new Date(),
+        "location.isSharing": isSharing !== undefined ? isSharing : true, // Default to sharing if updating
+      },
+    },
+    { new: true },
+  );
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, profile.location, "Location updated"));
+});
+
+const getNearbyProfiles = asyncHandler(async (req, res) => {
+  const { lat, long, radius = 5 } = req.query; // radius in km
+
+  if (!lat || !long) {
+    throw new ApiError(400, "Latitude and Longitude are required");
+  }
+
+  const radiusInMeters = parseFloat(radius) * 1000;
+
+  const nearbyProfiles = await Profile.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: "Point",
+          coordinates: [parseFloat(long), parseFloat(lat)],
+        },
+        distanceField: "distance",
+        maxDistance: radiusInMeters,
+        spherical: true,
+        query: {
+          "location.isSharing": true,
+          owner: { $ne: req.user._id }, // Exclude self
+        },
+      },
+    },
+    // Privacy: Project only safe fields
+    {
+      $project: {
+        owner: 1,
+        fullName: 1,
+        avatar: 1,
+        bio: 1,
+        "currentStatus.message": 1,
+        "currentStatus.activityType": 1,
+        distance: 1, // in meters
+        // Do NOT include location.coordinates
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "ownerDetails",
+        pipeline: [
+          {
+            $project: {
+              username: 1,
+              email: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$ownerDetails",
+    },
+    {
+      $addFields: {
+        owner: "$ownerDetails",
+      },
+    },
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      nearbyProfiles.map((p) => ({
+        ...p,
+        distance: Math.round(p.distance) + "m", // Format distance
+      })),
+      "Nearby profiles fetched",
+    ),
+  );
+});
+
+export {
+  getMyProfile,
+  updateProfile,
+  getUserProfileById,
+  updateLocation,
+  getNearbyProfiles,
+};

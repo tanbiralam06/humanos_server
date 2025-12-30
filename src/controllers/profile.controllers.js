@@ -96,8 +96,6 @@ const getUserProfileById = asyncHandler(async (req, res) => {
     );
 });
 
-export { getMyProfile, updateProfile, getUserProfileById };
-
 const updateLocation = asyncHandler(async (req, res) => {
   const { lat, long, accuracy, isSharing } = req.body;
 

@@ -34,6 +34,9 @@ export const initializeSocket = (server) => {
   io.on("connection", (socket) => {
     console.log(`User connected: ${socket.username} (${socket.userId})`);
 
+    // Join personal room for notifications
+    socket.join(socket.userId);
+
     // Join a chatroom
     socket.on("join-room", async ({ roomId, isAnonymous, displayName }) => {
       try {

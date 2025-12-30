@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
+import { createNotification } from "./notification.controllers.js";
 
 const toggleFollow = asyncHandler(async (req, res) => {
   const { userId } = req.params; // The user to follow/unfollow
@@ -31,6 +32,16 @@ const toggleFollow = asyncHandler(async (req, res) => {
       follower: req.user._id,
       following: userId,
     });
+
+    // Notify the user being followed
+    await createNotification({
+      recipient: userId,
+      sender: req.user._id,
+      type: "FOLLOW",
+      message: "started following you",
+      relatedId: req.user._id,
+    });
+
     return res
       .status(200)
       .json(

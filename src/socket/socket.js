@@ -4,6 +4,7 @@ import { Message } from "../models/message.models.js";
 import { Chatroom } from "../models/chatroom.models.js";
 import { PrivateChat } from "../models/privateChat.models.js";
 import { PrivateMessage } from "../models/privateMessage.models.js";
+import mongoose from "mongoose";
 
 let io;
 
@@ -140,7 +141,11 @@ export const initializeSocket = (server) => {
           });
         } else {
           // Add user to active participants if not already
-          if (!privateChat.activeParticipants.includes(userId)) {
+          if (
+            !privateChat.activeParticipants.some(
+              (id) => id.toString() === userId,
+            )
+          ) {
             privateChat.activeParticipants.push(userId);
             await privateChat.save();
           }
@@ -152,6 +157,18 @@ export const initializeSocket = (server) => {
         socket.join(roomName);
         socket.currentPrivateRoom = roomName; // Track for disconnect
         socket.currentPrivateChatId = chatId;
+
+        // --- NEW: Mark messages as READ ---
+        // If I am joining, messages sent by the OTHER person should be marked read
+        // Ensure userId is treated as ObjectId for comparison if needed, or rely on Mongoose casting
+        // Using $ne with string vs ObjectId can sometimes be flaky.
+        const updateResult = await PrivateMessage.updateMany(
+          { chatId, senderId: { $ne: userId }, isRead: false },
+          { $set: { isRead: true } },
+        );
+        console.log(
+          `Marked ${updateResult.modifiedCount} messages as read for user ${userId} in chat ${chatId}`,
+        );
 
         // 2. Fetch existing temporary messages
         const history = await PrivateMessage.find({ chatId }).sort({
@@ -176,18 +193,35 @@ export const initializeSocket = (server) => {
       try {
         if (!content || !content.trim()) return;
 
+        // Check if recipient is active in this chat RIGHT NOW
+        let isRead = false;
+        const chat = await PrivateChat.findById(chatId);
+        if (chat) {
+          const recipientId = chat.participants
+            .find((id) => id.toString() !== socket.userId)
+            ?.toString();
+          if (
+            recipientId &&
+            chat.activeParticipants
+              .map((id) => id.toString())
+              .includes(recipientId)
+          ) {
+            isRead = true;
+          }
+        }
+
         const message = await PrivateMessage.create({
           chatId,
           senderId: socket.userId,
           content: content.trim(),
+          isRead,
         });
 
         // Broadcast to the specific private room
         io.to(`private_${chatId}`).emit("new-private-message", message);
 
         // --- NEW: Notify Recipient ---
-        // Find the chat to get participants
-        const chat = await PrivateChat.findById(chatId);
+        // Reuse 'chat' from above or fetch if null (though it unlikely changed in ms)
         if (chat) {
           const recipientId = chat.participants.find(
             (id) => id.toString() !== socket.userId,
@@ -233,15 +267,33 @@ export const initializeSocket = (server) => {
       );
       await privateChat.save();
 
+      console.log(
+        `User ${userId} left chat ${chatId}. Active: ${privateChat.activeParticipants.length}`,
+      );
+
       // Check if NO ONE is left
       if (privateChat.activeParticipants.length === 0) {
-        console.log(`Private chat ${chatId} empty. Deleting messages...`);
-        await PrivateMessage.deleteMany({ chatId });
-        // Optionally delete the chat container itself or keep it for next time?
-        // If we keep it, it's just an empty container. Let's keep it to reuse ID.
-        // OR we can delete it too if "temporary" means the session itself is gone.
-        // The requirements say "messages are deleted". We can keep the chat document
-        // so we don't spam create/delete chat docs, but clear the messages.
+        // DEBUG: Check message status
+        const totalMessages = await PrivateMessage.countDocuments({ chatId });
+        const readMessages = await PrivateMessage.countDocuments({
+          chatId,
+          isRead: true,
+        });
+        const unreadMessages = await PrivateMessage.countDocuments({
+          chatId,
+          isRead: false,
+        });
+
+        console.log(
+          `Private chat ${chatId} empty. Tot: ${totalMessages}, Read: ${readMessages}, Unread: ${unreadMessages}`,
+        );
+
+        if (readMessages > 0) {
+          console.log(`Deleting ${readMessages} READ messages...`);
+          await PrivateMessage.deleteMany({ chatId, isRead: true });
+        } else {
+          console.log("No READ messages to delete.");
+        }
       }
     };
 

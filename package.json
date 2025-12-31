@@ -19,8 +19,10 @@
     "@types/express": "^5.0.3",
     "@types/mongoose": "^5.11.96",
     "@types/node": "^24.9.0",
+    "axios": "^1.13.2",
     "nodemon": "^3.1.11",
-    "prettier": "3.6.2"
+    "prettier": "3.6.2",
+    "socket.io-client": "^4.8.3"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

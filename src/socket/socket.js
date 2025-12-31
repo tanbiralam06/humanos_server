@@ -2,6 +2,8 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { Message } from "../models/message.models.js";
 import { Chatroom } from "../models/chatroom.models.js";
+import { PrivateChat } from "../models/privateChat.models.js";
+import { PrivateMessage } from "../models/privateMessage.models.js";
 
 let io;
 
@@ -118,16 +120,133 @@ export const initializeSocket = (server) => {
       }
     });
 
-    // Typing indicator
-    socket.on("typing", ({ roomId, isTyping }) => {
-      socket.to(roomId).emit("user-typing", {
-        username: socket.displayName,
-        isTyping,
-      });
+    // --- PRIVATE CHAT LOGIC ---
+
+    socket.on("join-private-chat", async ({ targetUserId }) => {
+      try {
+        const userId = socket.userId;
+        const participants = [userId, targetUserId].sort();
+
+        // 1. Find or create the PrivateChat session
+        // We verify if there is an existing chat with these exact participants
+        let privateChat = await PrivateChat.findOne({
+          participants: { $all: participants, $size: 2 },
+        });
+
+        if (!privateChat) {
+          privateChat = await PrivateChat.create({
+            participants,
+            activeParticipants: [userId], // First one joining
+          });
+        } else {
+          // Add user to active participants if not already
+          if (!privateChat.activeParticipants.includes(userId)) {
+            privateChat.activeParticipants.push(userId);
+            await privateChat.save();
+          }
+        }
+
+        const chatId = privateChat._id.toString();
+        const roomName = `private_${chatId}`;
+
+        socket.join(roomName);
+        socket.currentPrivateRoom = roomName; // Track for disconnect
+        socket.currentPrivateChatId = chatId;
+
+        // 2. Fetch existing temporary messages
+        const history = await PrivateMessage.find({ chatId }).sort({
+          createdAt: 1,
+        });
+
+        socket.emit("private-chat-init", {
+          chatId,
+          messages: history,
+        });
+
+        console.log(
+          `User ${socket.username} joined private chat ${chatId} with ${targetUserId}`,
+        );
+      } catch (error) {
+        console.error("Error joining private chat:", error);
+        socket.emit("error", { message: "Failed to join private chat" });
+      }
     });
 
+    socket.on("send-private-message", async ({ chatId, content }) => {
+      try {
+        if (!content || !content.trim()) return;
+
+        const message = await PrivateMessage.create({
+          chatId,
+          senderId: socket.userId,
+          content: content.trim(),
+        });
+
+        // Broadcast to the specific private room
+        io.to(`private_${chatId}`).emit("new-private-message", message);
+
+        // --- NEW: Notify Recipient ---
+        // Find the chat to get participants
+        const chat = await PrivateChat.findById(chatId);
+        if (chat) {
+          const recipientId = chat.participants.find(
+            (id) => id.toString() !== socket.userId,
+          );
+          if (recipientId) {
+            // Emit notification to the recipient's personal room
+            // (Assuming they joined their userId room on connection)
+            io.to(recipientId.toString()).emit("private-message-notification", {
+              senderId: socket.userId,
+              username: socket.displayName,
+              content:
+                content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+              chatId,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error sending private message:", error);
+        socket.emit("error", { message: "Failed to send private message" });
+      }
+    });
+
+    socket.on("leave-private-chat", async ({ chatId }) => {
+      try {
+        socket.leave(`private_${chatId}`);
+        socket.currentPrivateRoom = null;
+        socket.currentPrivateChatId = null;
+
+        await handlePrivateChatLeave(chatId, socket.userId);
+      } catch (error) {
+        console.error("Error leaving private chat:", error);
+      }
+    });
+
+    // Helper to handle cleanup
+    const handlePrivateChatLeave = async (chatId, userId) => {
+      const privateChat = await PrivateChat.findById(chatId);
+      if (!privateChat) return;
+
+      // Remove user from active participants
+      privateChat.activeParticipants = privateChat.activeParticipants.filter(
+        (id) => id.toString() !== userId,
+      );
+      await privateChat.save();
+
+      // Check if NO ONE is left
+      if (privateChat.activeParticipants.length === 0) {
+        console.log(`Private chat ${chatId} empty. Deleting messages...`);
+        await PrivateMessage.deleteMany({ chatId });
+        // Optionally delete the chat container itself or keep it for next time?
+        // If we keep it, it's just an empty container. Let's keep it to reuse ID.
+        // OR we can delete it too if "temporary" means the session itself is gone.
+        // The requirements say "messages are deleted". We can keep the chat document
+        // so we don't spam create/delete chat docs, but clear the messages.
+      }
+    };
+
     // Disconnect
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       console.log(`User disconnected: ${socket.username}`);
 
       if (socket.currentRoom) {
@@ -135,6 +254,14 @@ export const initializeSocket = (server) => {
           username: socket.displayName,
           timestamp: new Date(),
         });
+      }
+
+      // Handle private chat disconnect
+      if (socket.currentPrivateChatId) {
+        await handlePrivateChatLeave(
+          socket.currentPrivateChatId,
+          socket.userId,
+        );
       }
     });
   });

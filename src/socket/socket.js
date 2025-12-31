@@ -4,6 +4,7 @@ import { Message } from "../models/message.models.js";
 import { Chatroom } from "../models/chatroom.models.js";
 import { PrivateChat } from "../models/privateChat.models.js";
 import { PrivateMessage } from "../models/privateMessage.models.js";
+import { Notification } from "../models/notification.models.js";
 import mongoose from "mongoose";
 
 let io;
@@ -236,6 +237,36 @@ export const initializeSocket = (server) => {
                 content.substring(0, 50) + (content.length > 50 ? "..." : ""),
               chatId,
             });
+
+            // Persist Notification in Database (with Aggregation)
+            let notification = await Notification.findOne({
+              recipient: recipientId,
+              sender: socket.userId,
+              type: "MESSAGE",
+              isRead: false,
+            });
+
+            if (notification) {
+              // Aggregate existing
+              notification.groupCount = (notification.groupCount || 1) + 1;
+              notification.message =
+                content.substring(0, 50) + (content.length > 50 ? "..." : ""); // Optional: update preview
+              // Update createdAt to bring to top
+              notification.createdAt = new Date();
+              await notification.save();
+            } else {
+              // Create new
+              notification = await Notification.create({
+                recipient: recipientId,
+                sender: socket.userId,
+                type: "MESSAGE",
+                message:
+                  content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+                relatedId: chatId,
+                isRead: false,
+                groupCount: 1,
+              });
+            }
           }
         }
       } catch (error) {

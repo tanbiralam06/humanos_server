@@ -36,7 +36,20 @@ const getMyProfile = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { fullName, bio, locationName, username } = req.body;
+  const {
+    fullName,
+    bio,
+    locationName,
+    username,
+    birthday,
+    gender,
+    interests,
+    intent,
+    occupation,
+    educationLevel,
+    languages,
+    prompts,
+  } = req.body;
 
   // 1. Handle Username Update (if provided and different)
   if (username && username !== req.user.username) {
@@ -58,6 +71,14 @@ const updateProfile = asyncHandler(async (req, res) => {
         fullName,
         bio,
         locationName,
+        birthday,
+        gender,
+        interests,
+        intent,
+        occupation,
+        educationLevel,
+        languages,
+        prompts,
       },
     },
     { new: true }, // Return the updated document

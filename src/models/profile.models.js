@@ -70,6 +70,53 @@ const profileSchema = new Schema(
         type: Date,
       },
     },
+    // --- Matching Algorithm Fields ---
+    birthday: {
+      type: Date,
+      // Required for age calculation (Age = Date.now() - birthday)
+    },
+    gender: {
+      type: String,
+      enum: ["Male", "Female", "Non-binary", "Other", "Prefer not to say"],
+    },
+    interests: {
+      type: [String],
+      // Recommended: 3-5 tags
+    },
+    intent: {
+      type: String,
+      enum: [
+        "Dating",
+        "Friendship",
+        "Networking",
+        "Casual",
+        "Something Serious",
+      ],
+    },
+    occupation: {
+      type: String,
+      trim: true,
+    },
+    educationLevel: {
+      type: String,
+      enum: [
+        "High School",
+        "Bachelor",
+        "Master",
+        "Doctorate",
+        "Trade School",
+        "Other",
+      ],
+    },
+    languages: {
+      type: [String],
+    },
+    prompts: [
+      {
+        question: { type: String, required: true },
+        answer: { type: String, required: true },
+      },
+    ],
   },
   {
     timestamps: true,

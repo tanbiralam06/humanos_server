@@ -1,5 +1,6 @@
 import { Chatroom } from "../models/chatroom.models.js";
 import { User } from "../models/user.models.js";
+import { Block } from "../models/block.models.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
 
@@ -22,11 +23,28 @@ const universalSearch = asyncHandler(async (req, res) => {
 
   const searchQuery = q.trim();
 
-  // Search for users (people)
+  // Get list of blocked user IDs (users blocked by current user)
+  const blockedByUser = await Block.find({ blocker: req.user._id }).distinct(
+    "blocked",
+  );
+
+  // Get list of users who blocked the current user
+  const blockedByOthers = await Block.find({ blocked: req.user._id }).distinct(
+    "blocker",
+  );
+
+  // Combine both lists to exclude them from search results
+  const excludedUserIds = [
+    ...blockedByUser,
+    ...blockedByOthers,
+    req.user._id, // Also exclude self
+  ];
+
   // Search for users (people)
   const people = await User.aggregate([
     {
       $match: {
+        _id: { $nin: excludedUserIds }, // Exclude blocked users & self
         $or: [
           { username: { $regex: searchQuery, $options: "i" } },
           { email: { $regex: searchQuery, $options: "i" } },

@@ -29,6 +29,7 @@ import chatroomRouter from "./routes/chatroom.routes.js";
 import searchRouter from "./routes/search.routes.js";
 import followRouter from "./routes/follow.routes.js";
 import notificationRouter from "./routes/notification.routes.js";
+import blockRouter from "./routes/block.routes.js";
 import { errorHandler } from "./middlewares/error.middlewares.js";
 
 app.use("/api/v1/healthcheck", healthCheckRouter);
@@ -38,6 +39,7 @@ app.use("/api/v1/chatrooms", chatroomRouter);
 app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/follows", followRouter);
 app.use("/api/v1/notifications", notificationRouter);
+app.use("/api/v1/blocks", blockRouter);
 
 // Error Handling Middleware
 app.use(errorHandler);

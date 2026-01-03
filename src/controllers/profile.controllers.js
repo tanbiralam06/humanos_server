@@ -1,6 +1,7 @@
 import { Profile } from "../models/profile.models.js";
 import { User } from "../models/user.models.js";
 import { Follow } from "../models/follow.models.js";
+import { Block } from "../models/block.models.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
@@ -97,6 +98,27 @@ const getUserProfileById = asyncHandler(async (req, res) => {
     "username email",
   );
 
+  let isBlockedByMe = false;
+
+  if (userId.toString() !== req.user._id.toString()) {
+    const blockRecord = await Block.findOne({
+      $or: [
+        { blocker: req.user._id, blocked: userId },
+        { blocker: userId, blocked: req.user._id },
+      ],
+    });
+
+    if (blockRecord) {
+      if (blockRecord.blocker.toString() === userId) {
+        // I am blocked by them -> I can't see their profile
+        throw new ApiError(404, "Profile not found");
+      } else {
+        // I blocked them -> I can see their profile (to unblock), but mark as blocked
+        isBlockedByMe = true;
+      }
+    }
+  }
+
   if (!profile) {
     throw new ApiError(404, "Profile not found");
   }
@@ -113,7 +135,12 @@ const getUserProfileById = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         200,
-        { ...profile.toObject(), followersCount, followingCount },
+        {
+          ...profile.toObject(),
+          followersCount,
+          followingCount,
+          isBlockedByMe,
+        },
         "User profile fetched successfully",
       ),
     );
@@ -155,6 +182,14 @@ const getNearbyProfiles = asyncHandler(async (req, res) => {
 
   const radiusInMeters = parseFloat(radius) * 1000;
 
+  const blockedByUser = await Block.find({ blocker: req.user._id }).distinct(
+    "blocked",
+  );
+  const blockedByOthers = await Block.find({ blocked: req.user._id }).distinct(
+    "blocker",
+  );
+  const excludedUserIds = [...blockedByUser, ...blockedByOthers];
+
   const nearbyProfiles = await Profile.aggregate([
     {
       $geoNear: {
@@ -167,7 +202,10 @@ const getNearbyProfiles = asyncHandler(async (req, res) => {
         spherical: true,
         query: {
           "location.isSharing": true,
-          owner: { $ne: req.user._id }, // Exclude self
+          owner: {
+            $ne: req.user._id, // Exclude self
+            $nin: excludedUserIds,
+          },
         },
       },
     },
